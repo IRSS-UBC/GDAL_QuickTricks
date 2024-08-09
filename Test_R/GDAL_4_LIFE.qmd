@@ -1,0 +1,97 @@
+---
+title: "GDAL_4_LIFE"
+author: "Sarah Smith-Tripp"
+format: html
+editor: visual
+knitr:
+  opts_knit:
+    root.dir: "C:/Users/ssmithtr/Desktop/Sync/Workoffline/New folder"
+---
+
+# 1. Tips & Tricks: GDAL 
+
+## GDAL
+
+GDAL is the backbone of raster processing and most libraries working with rasters are built to rely on GDAL. While there are many useful functions that have been optimized, I have found that there a couple of "GDAL" classics that are amazing to resources. In fact, these tips save me so much time that I go through the *pain* of switching between python and R.
+
+## Ok but what do I do? 
+
+You *must* have GDAL downloaded onto your computer. The simplest way I have found to do this is to go to [OSGEO](https://www.osgeo.org/)
+
+Then you have to build a python environment that has osgeo integrated into it.
+
+## Is this hassle really worth it? 
+
+Yes, and here I will now show you why.
+
+# 1. Testing Datasets
+
+Let's first introduce some test datasets
+
+1.  A small 10000x10000 raster with 10 bands 
+2.  A small 25000 x 25000 raster that is *offset* from the 100x100 raster
+3.  A shapefile
+
+```{r, include = FALSE, echo = FALSE, warning=FALSE}
+library(terra)
+library(tidyverse)
+#setwd('C:/Users/ssmithtr/Desktop/Sync/Workoffline/New folder/')
+```
+
+```{r, echo = FALSE, include = FALSE, warning=FALSE, eval = T}
+r100 = rast(paste0(getwd(), '/Test_R/raster_100x100_10bands.tif'))
+r250 = rast(paste0(getwd(), '/Test_R/raster_250x250.tif'))
+shp = vect(paste0(getwd(), '/Test_R/clip_shapefile.shp'))
+par(mfrow = c(1,2))
+plot(r100[[1]])
+plot(shp, add = T, col = 'red')
+title('100x100 band 1 + shapefile')
+plot(r250)
+title('250x250')
+```
+```{r}
+library(reticulate)
+## set up an environment that sources your environment with GDAL 
+use_python('C:/Users/ssmithtr/.conda/envs/earth-analytics-python/python.exe')
+source_python(paste0(getwd(), "/GDAl_QuickTricks.py"))
+```
+## Test the Quick Crop
+
+```{r, eval =T}
+r_dir <- paste0(getwd(), '/Test_R/bands')
+shp_dir <- paste0(paste0(getwd(), '/Test_R/clip_shapefile.shp'))
+out_dir <- paste0(getwd(), '/Test_R/current_test')
+rlist <- rast(list.files(r_dir, pattern = '.tif', full.names = T))
+system.time(terra::crop(rlist, shp))
+system.time(quick_clip(r_dir,shp_dir, out_dir))
+## time should be 14.439344644546509
+
+```
+## Test the quick mosaic 
+First, I make a raster with NA 'whole' that overlaps with the 10 band raster 
+
+```{r, eval=T}
+r_dir <- paste0(getwd(), '/Test_R/bands')
+r_sel = list.files(r_dir, full.names = T)[[1]]
+r_NA <- paste0(getwd(), '/Test_R/raster_250x250_with_hole.tif')
+rlist <- list(r_NA, r_sel)
+system.time(terra::merge(rast(r_sel), rast(r_NA)))
+system.time(quick_mosaic(rlist, out_dir))
+## time should be  20.58
+
+# plot(rast(out_dir))
+```
+
+## Test the Quick Translate 
+```{r}
+r_NA <- paste0(getwd(), '/Test_R/raster_250x250_with_hole.tif')
+r_in <- rast(r_NA)
+out_dir <- paste0(getwd(), '/Test_R/current_test')
+crs(r_in) <- 'EPSG:3005'
+new_projection <- 'EPSG:4326'
+system.time(terra::project(r_in, new_projection))
+system.time(quick_translate(r_NA,
+                            paste0(out_dir, '.tif'), new_projection))
+## time should be 10.731093406677246
+
+```
